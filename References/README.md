@@ -1,0 +1,10 @@
+- boot:
+  - `start.elf`, `bootcode.bin`는 GPU Firmware와 Bootloader로 사용됩니다.
+  - [Github 'raspberrypi/firmware' repository](https://github.com/raspberrypi/firmware/)
+- documentation:
+  - BCM2836(Raspberry Pi 2 Model B에서 사용되는 CPU)에 관련된 문서들이 있습니다.
+  - `BCM2835-ARM-Peripherals.pdf` : [BCM2835 ARM Peripheral specification](https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2835/BCM2835-ARM-Peripherals.pdf)
+    - BCM2836의 하부 구조는 BCM2835와 동일합니다.
+    - 차이점은 ARM1176JZF-S 프로세서를 Cortex-A7로 바꾼것밖에 없습니다.
+  - `QA7_rev3.4.pdf` : [BCM2836 ARM-local peripherals](https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2836/QA7_rev3.4.pdf)
+  - `DDI0464F_cortex_a7_mpcore_r0p5_trm.pdf` : [Cortex-A7 MPcore Reference Manual Documentation](http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0464f/index.html)
