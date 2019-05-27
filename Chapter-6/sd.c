@@ -226,9 +226,10 @@ int sd_readblock(unsigned int lba, unsigned char *buffer, unsigned int num)
 /**
  * set SD clock to frequency in Hz
  */
-int sd_clk(unsigned int f)
+int sd_clk(unsigned int freq)
 {
-        unsigned int d,c=41666666/f,x,s=32,h=0;
+        unsigned int d,x,s=32,h=0;
+        unsigned int c=41666666/freq; // Pi SD frequency is always 41.666666···Mhz on baremetal
         int cnt = 100000;
         while((EMMC_STATUS & (SR_CMD_INHIBIT|SR_DAT_INHIBIT)) && cnt--)
                 wait_msec(1);
@@ -289,69 +290,84 @@ int sd_clk(unsigned int f)
 int sd_init()
 {
         long r,cnt,ccs=0;
-        // GPIO_CD
-        r=GPFSEL4;
-        r&=~(7<<(7*3));
-        GPFSEL4=r;
-        GPPUD=2;
-        wait_cycles(150);
-        GPPUDCLK1=(1<<15);
-        wait_cycles(150);
-        GPPUD=0;
-        GPPUDCLK1=0;
-        r=GPHEN1;
-        r|=1<<15;
+        // SD_CARD_DET
+        // GPIO47~53은 SDCard Interface에서 사용됩니다.
+        // GPIO 47은 SDCard Detect로 사용됩니다. (SD_CARD_DET)
+        // https://elinux.org/RPi_Low-level_peripherals#GPIO_hardware_hacking
+        r=GPFSEL4; // GPFSEL4는 GPIO 40~49까지 담당함.
+        r&=~(7<<(7*3)); // GPIO Pin 47을 Input으로 설정
+        GPFSEL4=r; // GPFSEL4에 위의 설정을 자장
+        GPPUD=2; // Enable Pull Up control (GPPUD에 기록하여 필요한 control signal를 설정)
+        wait_cycles(150); // control signal를 설정하기 위해 150 사이클을 기다립니다.
+        GPPUDCLK1=(1<<15); // GPIO Pin 47을 Assert Clock on line
+                           // GPPUD에서 수정한 GPIO의 control signal에 clock을 보내기 위해 GPPUDCLK1에서도 해당 GPIO 핀을 수정합니다.
+        wait_cycles(150); // 150 사이클을 기다립니다.
+        GPPUD=0; // GPPUD에 기록했던 GPIO의 설정을 제거합니다.
+        GPPUDCLK1=0; // GPPUDCLK1에 기록했던 GPIO의 설정을 제거합니다.
+                     // 이 과정들은 101페이지의 'GPIO Pull-up/down Clock Registers (GPPUDCLKn)'에 나와있음.
+        r=GPHEN1; // event detect status register (GPHEN1)
+        r|=1<<15; // High on GPIO pin 47 sets corresponding bit in GPEDS
         GPHEN1=r;
 
-        // GPIO_CLK, GPIO_CMD
+        // SD_CLK_R, SD_CMD_R
         r=GPFSEL4;
-        r|=(7<<(8*3))|(7<<(9*3));
+        r|=(7<<(8*3))|(7<<(9*3)); // GPIO Pin 48, 49을 Input으로 설정
         GPFSEL4=r;
-        GPPUD=2;
-        wait_cycles(150);
-        GPPUDCLK1=(1<<16)|(1<<17);
-        wait_cycles(150);
-        GPPUD=0;
-        GPPUDCLK1=0;
+        GPPUD=2; // Enable Pull Up control (GPPUD에 기록하여 필요한 control signal를 설정)
+        wait_cycles(150); // control signal를 설정하기 위해 150 사이클을 기다립니다.
+        GPPUDCLK1=(1<<16)|(1<<17); // GPIO Pin 48, 49을 Assert Clock on line
+                                   // GPPUD에서 수정한 GPIO의 control signal에 clock을 보내기 위해 GPPUDCLK1에서도 해당 GPIO 핀을 수정합니다.
+        wait_cycles(150); // 150 사이클을 기다립니다.
+        GPPUD=0; // GPPUD에 기록했던 GPIO의 설정을 제거합니다.
+        GPPUDCLK1=0; // GPPUDCLK1에 기록했던 GPIO의 설정을 제거합니다.
 
-        // GPIO_DAT0, GPIO_DAT1, GPIO_DAT2, GPIO_DAT3
-        r=GPFSEL5;
-        r|=(7<<(0*3)) | (7<<(1*3)) | (7<<(2*3)) | (7<<(3*3));
+        // SD_DATA0_R, SD_DATA1_R, SD_DATA2_R, SD_DATA3_R
+        r=GPFSEL5; // GPFSEL4는 GPIO 50~59까지 담당함.
+        r|=(7<<(0*3)) | (7<<(1*3)) | (7<<(2*3)) | (7<<(3*3)); // GPIO 50, 51, 52, 53을 Input으로 설정
         GPFSEL5=r;
-        GPPUD=2;
-        wait_cycles(150);
-        GPPUDCLK1=(1<<18) | (1<<19) | (1<<20) | (1<<21);
-        wait_cycles(150);
-        GPPUD=0;
-        GPPUDCLK1=0;
+        GPPUD=2; // Enable Pull Up control (GPPUD에 기록하여 필요한 control signal를 설정)
+        wait_cycles(150); // control signal를 설정하기 위해 150 사이클을 기다립니다.
+        GPPUDCLK1=(1<<18) | (1<<19) | (1<<20) | (1<<21); // GPIO Pin 50, 51, 52, 53을 Assert Clock on line
+                                                         // GPPUD에서 수정한 GPIO의 control signal에 clock을 보내기 위해 GPPUDCLK1에서도 해당 GPIO 핀을 수정합니다.
+        wait_cycles(150); // 150 사이클을 기다립니다.
+        GPPUD=0; // GPPUD에 기록했던 GPIO의 설정을 제거합니다.
+        GPPUDCLK1=0; // GPPUDCLK1에 기록했던 GPIO의 설정을 제거합니다.
 
+        // EMMC_SLOTISR_VER : 버전 정보와 슬롯 인터럽트 상태를 포함한다.
         sd_hv = (EMMC_SLOTISR_VER & HOST_SPEC_NUM) >> HOST_SPEC_NUM_SHIFT;
         uart_puts("EMMC: GPIO set up\n");
         // Reset the card.
         EMMC_CONTROL0 = 0;
-        EMMC_CONTROL1 |= C1_SRST_HC;
+        EMMC_CONTROL1 |= C1_SRST_HC; // SRST_HC (Reset the complete host circuit)
         cnt=10000;
         do {
                 wait_msec(10);
         } while( (EMMC_CONTROL1 & C1_SRST_HC) && cnt-- );
+        // 10000회 확인해서 EMMC_CONTROL1의 값이 C1_SRST_HC와 다르면 (리셋되면 값이 설정됨) reset ok
         if(cnt<=0) {
                 uart_puts("ERROR: failed to reset EMMC\n");
                 return SD_ERROR;
         }
         uart_puts("EMMC: reset OK\n");
+        // Data timeout 단위를 최대로 설정 및 절전을 위한 내부 eMMC Clock의 Clock 활성화
         EMMC_CONTROL1 |= C1_CLK_INTLEN | C1_TOUNIT_MAX;
         wait_msec(10);
         // Set clock to setup frequency.
         if((r=sd_clk(400000)))
                 return r;
+        // IRPT_EN Register 초기화
         EMMC_INT_EN   = 0xffffffff;
+        // IRPT_MASK Register 초기화
         EMMC_INT_MASK = 0xffffffff;
+        // sd_scr = SD Card Configuration register
+        // sd_rca = Relative Card Address register (SD카드 상대 주소 값)
+        // 초기화
         sd_scr[0]=sd_scr[1]=sd_rca=sd_err=0;
-        sd_cmd(CMD_GO_IDLE,0);
+        sd_cmd(CMD_GO_IDLE,0); // CMD0
         if(sd_err)
                 return sd_err;
 
-        sd_cmd(CMD_SEND_IF_COND,0x000001AA);
+        sd_cmd(CMD_SEND_IF_COND,0x000001AA); // CMD8
         if(sd_err)
                 return sd_err;
         cnt=6;
